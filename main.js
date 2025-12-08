@@ -2,10 +2,8 @@ const formatPhoneNumber = (text: string): string => {
   // Remove all non-digits
   const cleaned = text.replace(/\D/g, '');
 
-  // Format as +91 XXXXX XXXXX (Indian format)
-  if (cleaned.length <= 2) return cleaned.length > 0 ? `+${cleaned}` : '';
-  if (cleaned.length <= 7) return `+${cleaned.slice(0, 2)} ${cleaned.slice(2)}`;
-  return `+${cleaned.slice(0, 2)} ${cleaned.slice(2, 7)} ${cleaned.slice(7, 12)}`;
+  // Format as +91 XXXXX XXXXX (Indian format - user enters 10 digits only)
+  if (cleaned.length === 0) return '+91 ';
+  if (cleaned.length <= 5) return `+91 ${cleaned}`;
+  return `+91 ${cleaned.slice(0, 5)} ${cleaned.slice(5, 10)}`;
 };
-
-console.log(formatPhoneNumber("919876543210")); // +91 98765 43210
