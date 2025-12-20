@@ -1,32 +1,39 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   Animated,
-} from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { findParentByPhone, ParentData } from '../utils/firebase';
-import { requestNotificationPermissions } from '../utils/notifications';
+  Image,
+} from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import {
+  findParentByPhone,
+  ParentData,
+  sendOTP,
+  verifyOTP,
+} from "../../utils/firebase";
+import { requestNotificationPermissions } from "../../utils/notifications";
+import { styles } from "./styles";
+import { FirebaseRecaptchaVerifierModal } from "expo-firebase-recaptcha";
+import { app } from "../../utils/firebase";
 
 // Theme colors
 const COLORS = {
-  primary: '#6C63FF',
-  secondary: '#4CAF50',
-  accent: '#F7F8FA',
-  background: '#FFFFFF',
-  text: '#333333',
-  textLight: '#666666',
-  border: '#E0E0E0',
-  error: '#F44336',
+  primary: "#6C63FF",
+  secondary: "#4CAF50",
+  accent: "#F7F8FA",
+  background: "#FFFFFF",
+  text: "#333333",
+  textLight: "#666666",
+  border: "#E0E0E0",
+  error: "#F44336",
 };
 
 type RootStackParamList = {
@@ -37,7 +44,7 @@ type RootStackParamList = {
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
-  'Login'
+  "Login"
 >;
 
 interface LoginScreenProps {
@@ -45,16 +52,17 @@ interface LoginScreenProps {
 }
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
-  const [step, setStep] = useState<'phone' | 'otp'>('phone');
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [step, setStep] = useState<"phone" | "otp">("phone");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(0);
-  
+
   const otpInputRefs = useRef<(TextInput | null)[]>([]);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
+  const recaptchaVerifier = useRef(null);
 
   useEffect(() => {
     // Entry animation
@@ -80,27 +88,16 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
     }
   }, [countdown]);
 
-  const formatPhoneNumber = (text: string): string => {
-    // Remove all non-digits
-    const cleaned = text.replace(/\D/g, '');
-    
-    // Format as +1 (234) 567-8900
-    if (cleaned.length <= 1) return cleaned;
-    if (cleaned.length <= 4) return `+${cleaned.slice(0, 1)} (${cleaned.slice(1)}`;
-    if (cleaned.length <= 7) return `+${cleaned.slice(0, 1)} (${cleaned.slice(1, 4)}) ${cleaned.slice(4)}`;
-    return `+${cleaned.slice(0, 1)} (${cleaned.slice(1, 4)}) ${cleaned.slice(4, 7)}-${cleaned.slice(7, 11)}`;
-  };
-
   const handlePhoneChange = (text: string) => {
     setError(null);
-    setPhoneNumber(formatPhoneNumber(text));
+    setPhoneNumber(text);
   };
 
   const handleSendOTP = async () => {
-    const cleanedPhone = phoneNumber.replace(/\D/g, '');
-    
+    const cleanedPhone = phoneNumber.replace(/\D/g, "");
+
     if (cleanedPhone.length < 10) {
-      setError('Please enter a valid phone number');
+      setError("Please enter a valid phone number");
       return;
     }
 
@@ -108,23 +105,20 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
     setError(null);
 
     try {
-      // In a real app, this would use Firebase Phone Auth
-      // For demo/testing purposes, we'll simulate OTP sending
-      // and proceed directly to OTP verification
-      
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      setStep('otp');
-      setCountdown(60);
-      
-      // Focus first OTP input
-      setTimeout(() => {
-        otpInputRefs.current[0]?.focus();
-      }, 100);
-      
-    } catch (err: any) {
-      setError(err.message || 'Failed to send OTP. Please try again.');
+      // IMPORTANT: Indian numbers must have +91
+      const fullPhone = `+91${cleanedPhone}`;
+      if (recaptchaVerifier?.current) {
+        const result = await sendOTP(fullPhone, recaptchaVerifier?.current);
+        // save to state so we can confirm OTP later
+        setStep("otp");
+        setCountdown(60);
+
+        // Focus first OTP
+        setTimeout(() => otpInputRefs.current[0]?.focus(), 100);
+      }
+    } catch (err) {
+      console.log("OTP Error", err);
+      setError("Failed to send OTP. Try again.");
     } finally {
       setIsLoading(false);
     }
@@ -132,10 +126,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 
   const handleOtpChange = (value: string, index: number) => {
     setError(null);
-    
+
     if (value.length > 1) {
       // Handle paste
-      const digits = value.replace(/\D/g, '').slice(0, 6).split('');
+      const digits = value.replace(/\D/g, "").slice(0, 6).split("");
       const newOtp = [...otp];
       digits.forEach((digit, i) => {
         if (index + i < 6) {
@@ -143,7 +137,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
         }
       });
       setOtp(newOtp);
-      
+
       // Focus appropriate input
       const nextIndex = Math.min(index + digits.length, 5);
       otpInputRefs.current[nextIndex]?.focus();
@@ -161,16 +155,16 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   };
 
   const handleOtpKeyPress = (key: string, index: number) => {
-    if (key === 'Backspace' && !otp[index] && index > 0) {
+    if (key === "Backspace" && !otp[index] && index > 0) {
       otpInputRefs.current[index - 1]?.focus();
     }
   };
 
   const handleVerifyOTP = async () => {
-    const otpCode = otp.join('');
-    
+    const otpCode = otp.join("");
+
     if (otpCode.length !== 6) {
-      setError('Please enter the complete 6-digit code');
+      setError("Please enter all 6 digits");
       return;
     }
 
@@ -178,44 +172,26 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
     setError(null);
 
     try {
-      // In a real app, this would verify with Firebase
-      // For demo purposes, we'll accept any 6-digit code
-      // and look up the parent by phone number
-      
-      const cleanedPhone = phoneNumber.replace(/\D/g, '');
-      
-      // Find parent in Firestore
+      // Verify with Firebase
+      const user = await verifyOTP(otpCode);
+
+      // Find parent by phone number from Firestore
+      const cleanedPhone = phoneNumber.replace(/\D/g, "");
       const parentData = await findParentByPhone(cleanedPhone);
-      
+
       if (!parentData) {
-        // For demo, create a mock parent session
-        const mockParent: ParentData = {
-          parentId: 'demo-parent-' + cleanedPhone,
-          phoneNumber: cleanedPhone,
-          adminId: 'demo-admin',
-          name: 'Parent User',
-        };
-        
-        await AsyncStorage.setItem('parentSession', JSON.stringify(mockParent));
-        
-        // Request notification permissions
-        await requestNotificationPermissions();
-        
-        navigation.replace('Home');
+        setError("No parent found for this number.");
         return;
       }
-      
-      // Store parent session
-      await AsyncStorage.setItem('parentSession', JSON.stringify(parentData));
-      
-      // Request notification permissions
+
+      await AsyncStorage.setItem("parentSession", JSON.stringify(parentData));
+
       await requestNotificationPermissions();
-      
-      // Navigate to Home
-      navigation.replace('Home');
-      
-    } catch (err: any) {
-      setError(err.message || 'Invalid OTP. Please try again.');
+
+      navigation.replace("Home");
+    } catch (err) {
+      console.log("Verify error", err);
+      setError("Invalid OTP");
     } finally {
       setIsLoading(false);
     }
@@ -223,38 +199,42 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 
   const handleResendOTP = async () => {
     if (countdown > 0) return;
-    
+
     setIsLoading(true);
     setError(null);
-    setOtp(['', '', '', '', '', '']);
+    setOtp(["", "", "", "", "", ""]);
 
     try {
       // Simulate resending OTP
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
       setCountdown(60);
       otpInputRefs.current[0]?.focus();
     } catch (err: any) {
-      setError(err.message || 'Failed to resend OTP');
+      setError(err.message || "Failed to resend OTP");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleChangeNumber = () => {
-    setStep('phone');
-    setOtp(['', '', '', '', '', '']);
+    setStep("phone");
+    setOtp(["", "", "", "", "", ""]);
     setError(null);
   };
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
+        <FirebaseRecaptchaVerifierModal
+          ref={recaptchaVerifier}
+          firebaseConfig={app.options}
+        />
         <Animated.View
           style={[
             styles.content,
@@ -267,19 +247,22 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
           {/* Logo Section */}
           <View style={styles.logoContainer}>
             <View style={styles.logoCircle}>
-              <Text style={styles.logoEmoji}>💊</Text>
+              <Image
+                source={require("../../assets/logo.png")}
+                style={{ width: 80, height: 80 }}
+              />
             </View>
             <Text style={styles.appName}>DoseUp</Text>
           </View>
 
-          <Text style={styles.welcomeText}>Welcome to DoseUp</Text>
+          <Text style={styles.welcomeText}>Welcome to Dose Up</Text>
           <Text style={styles.subtitleText}>
             Keep your family's health on track
           </Text>
 
           {/* Form Card */}
           <View style={styles.card}>
-            {step === 'phone' ? (
+            {step === "phone" ? (
               <>
                 <Text style={styles.cardTitle}>Sign In</Text>
                 <Text style={styles.cardSubtitle}>
@@ -291,13 +274,13 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
                   <Text style={styles.inputIcon}>📱</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="+1 (234) 567-8900"
+                    placeholder="9999999999"
                     placeholderTextColor={COLORS.textLight}
                     value={phoneNumber}
                     onChangeText={handlePhoneChange}
                     keyboardType="phone-pad"
                     autoFocus
-                    maxLength={17}
+                    maxLength={10}
                   />
                 </View>
 
@@ -326,7 +309,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
               <>
                 <Text style={styles.cardTitle}>Verify Your Phone</Text>
                 <Text style={styles.cardSubtitle}>
-                  We sent a code to{' '}
+                  We sent a code to{" "}
                   <Text style={styles.phoneHighlight}>{phoneNumber}</Text>
                 </Text>
 
@@ -383,7 +366,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
                   >
                     {countdown > 0
                       ? `Resend OTP in ${countdown}s`
-                      : 'Resend OTP'}
+                      : "Resend OTP"}
                   </Text>
                 </TouchableOpacity>
               </>
@@ -398,196 +381,5 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
     </KeyboardAvoidingView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.accent,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    padding: 24,
-  },
-  content: {
-    alignItems: 'center',
-  },
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  logoCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: COLORS.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 8,
-    marginBottom: 12,
-  },
-  logoEmoji: {
-    fontSize: 36,
-  },
-  appName: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  welcomeText: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 8,
-  },
-  subtitleText: {
-    fontSize: 16,
-    color: COLORS.textLight,
-    marginBottom: 32,
-  },
-  card: {
-    backgroundColor: COLORS.background,
-    borderRadius: 24,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 24,
-    elevation: 8,
-  },
-  cardTitle: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: COLORS.text,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  cardSubtitle: {
-    fontSize: 15,
-    color: COLORS.textLight,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  phoneHighlight: {
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  changeNumberText: {
-    color: COLORS.primary,
-    fontSize: 14,
-    fontWeight: '500',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 8,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.accent,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  inputIcon: {
-    fontSize: 18,
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: COLORS.text,
-    paddingVertical: 14,
-  },
-  otpContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 24,
-  },
-  otpInput: {
-    width: 48,
-    height: 56,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.accent,
-    textAlign: 'center',
-    fontSize: 24,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  otpInputFilled: {
-    borderColor: COLORS.primary,
-    backgroundColor: `${COLORS.primary}10`,
-  },
-  errorText: {
-    color: COLORS.error,
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  button: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 16,
-    paddingVertical: 16,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  buttonText: {
-    color: COLORS.background,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  buttonArrow: {
-    color: COLORS.background,
-    fontSize: 18,
-    marginLeft: 8,
-  },
-  infoText: {
-    color: COLORS.textLight,
-    fontSize: 13,
-    textAlign: 'center',
-    marginTop: 16,
-  },
-  resendContainer: {
-    marginTop: 20,
-    alignItems: 'flex-start',
-  },
-  resendText: {
-    color: COLORS.primary,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  resendTextDisabled: {
-    color: COLORS.textLight,
-  },
-  footerText: {
-    color: COLORS.textLight,
-    fontSize: 13,
-    textAlign: 'center',
-    marginTop: 32,
-  },
-});
 
 export default LoginScreen;

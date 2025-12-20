@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Text, Image } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -79,7 +79,10 @@ const App: React.FC = () => {
     return (
       <View style={styles.loadingContainer}>
         <View style={styles.logoContainer}>
-          <Text style={styles.logoEmoji}>💊</Text>
+        <Image
+                source={require("./assets/logo.png")}
+                style={{ width: 100, height: 100 }}
+              />
         </View>
         <Text style={styles.appName}>DoseUp</Text>
         <ActivityIndicator
@@ -138,11 +141,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accent,
   },
   logoContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 30,
-    backgroundColor: COLORS.background,
-    justifyContent: 'center',
     alignItems: 'center',
     shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 8 },

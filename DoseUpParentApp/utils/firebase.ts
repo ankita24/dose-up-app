@@ -1,14 +1,12 @@
-import { initializeApp, FirebaseApp } from 'firebase/app';
+import { initializeApp, FirebaseApp } from "firebase/app";
 import {
   getAuth,
   Auth,
   signInWithPhoneNumber,
-  PhoneAuthProvider,
-  signInWithCredential,
   signOut as firebaseSignOut,
   ConfirmationResult,
   ApplicationVerifier,
-} from 'firebase/auth';
+} from "firebase/auth";
 import {
   getFirestore,
   Firestore,
@@ -22,17 +20,27 @@ import {
   DocumentData,
   QuerySnapshot,
   Unsubscribe,
-} from 'firebase/firestore';
+  getDoc,
+  addDoc,
+} from "firebase/firestore";
+import {
+  API_KEY,
+  AUTH_DOMAIN,
+  PROJECT_ID,
+  STORAGE_BUCKET,
+  MESSAGING_SENDER_ID,
+  APP_ID,
+} from "@env";
+import { format } from "date-fns";
 
 // Firebase configuration - Replace with your actual config
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID",
-  measurementId: "YOUR_MEASUREMENT_ID",
+  apiKey: API_KEY,
+  authDomain: AUTH_DOMAIN,
+  projectId: PROJECT_ID,
+  storageBucket: STORAGE_BUCKET,
+  messagingSenderId: MESSAGING_SENDER_ID,
+  appId: APP_ID,
 };
 
 // Initialize Firebase
@@ -57,12 +65,29 @@ export interface Medicine {
   lastTakenAt?: string;
   dosage?: string;
   notes?: string;
+  frequency: { type: "daily" | "weekly"; days?: number[] };
 }
 
 export interface DoseHistory {
   takenAt: string;
   medicineId: string;
+  date?: string;
 }
+
+export type DoseRow = {
+  medicineId: string;
+  medicineName: string;
+  doseTime: string; // "08:00"
+  medicine: Medicine;
+};
+
+export type DoseLog = {
+  id: string;
+  medicineId: string;
+  doseTime: string; // "08:00"
+  date: string; // yyyy-MM-dd
+  takenAt: number; // Date.now() OR Firestore Timestamp
+};
 
 // Store confirmation result for OTP verification
 let confirmationResult: ConfirmationResult | null = null;
@@ -77,11 +102,17 @@ export const sendOTP = async (
   recaptchaVerifier: ApplicationVerifier
 ): Promise<ConfirmationResult> => {
   try {
-    const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
-    confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, recaptchaVerifier);
+    const formattedPhone = phoneNumber.startsWith("+")
+      ? phoneNumber
+      : `+${phoneNumber}`;
+    confirmationResult = await signInWithPhoneNumber(
+      auth,
+      formattedPhone,
+      recaptchaVerifier
+    );
     return confirmationResult;
   } catch (error) {
-    console.error('Error sending OTP:', error);
+    console.error("Error sending OTP:", error);
     throw error;
   }
 };
@@ -92,12 +123,14 @@ export const sendOTP = async (
 export const verifyOTP = async (code: string): Promise<any> => {
   try {
     if (!confirmationResult) {
-      throw new Error('No confirmation result found. Please request OTP first.');
+      throw new Error(
+        "No confirmation result found. Please request OTP first."
+      );
     }
     const result = await confirmationResult.confirm(code);
     return result.user;
   } catch (error) {
-    console.error('Error verifying OTP:', error);
+    console.error("Error verifying OTP:", error);
     throw error;
   }
 };
@@ -110,7 +143,7 @@ export const signOut = async (): Promise<void> => {
     await firebaseSignOut(auth);
     confirmationResult = null;
   } catch (error) {
-    console.error('Error signing out:', error);
+    console.error("Error signing out:", error);
     throw error;
   }
 };
@@ -118,22 +151,27 @@ export const signOut = async (): Promise<void> => {
 /**
  * Find parent by phone number across all admin users
  */
-export const findParentByPhone = async (phoneNumber: string): Promise<ParentData | null> => {
+export const findParentByPhone = async (
+  phoneNumber: string
+): Promise<ParentData | null> => {
   try {
-    const formattedPhone = phoneNumber.replace(/\D/g, '');
-    
+    const formattedPhone = phoneNumber.replace(/\D/g, "");
     // Get all users (admins)
-    const usersRef = collection(db, 'users');
+    const usersRef = collection(db, "users");
     const usersSnapshot = await getDocs(usersRef);
-    
+    const testSnap = await getDoc(
+      doc(db, "users", "Ceo9m3Dk4ENnCHweemCelTSaMGn2")
+    );
+    console.log("DOC EXISTS?", testSnap.exists());
+
     for (const userDoc of usersSnapshot.docs) {
       const adminId = userDoc.id;
-      const parentsRef = collection(db, 'users', adminId, 'parents');
-      
+      const parentsRef = collection(db, "users", adminId, "parents");
+
       // Query for parent with matching phone number
-      const q = query(parentsRef, where('phoneNumber', '==', phoneNumber));
+      const q = query(parentsRef, where("phoneNumber", "==", phoneNumber));
       const parentsSnapshot = await getDocs(q);
-      
+
       if (!parentsSnapshot.empty) {
         const parentDoc = parentsSnapshot.docs[0];
         return {
@@ -143,11 +181,11 @@ export const findParentByPhone = async (phoneNumber: string): Promise<ParentData
           name: parentDoc.data().name,
         };
       }
-      
+
       // Also try with formatted phone
-      const q2 = query(parentsRef, where('phoneNumber', '==', formattedPhone));
+      const q2 = query(parentsRef, where("phoneNumber", "==", formattedPhone));
       const parentsSnapshot2 = await getDocs(q2);
-      
+
       if (!parentsSnapshot2.empty) {
         const parentDoc = parentsSnapshot2.docs[0];
         return {
@@ -158,10 +196,10 @@ export const findParentByPhone = async (phoneNumber: string): Promise<ParentData
         };
       }
     }
-    
+
     return null;
   } catch (error) {
-    console.error('Error finding parent:', error);
+    console.error("Error finding parent:", error);
     throw error;
   }
 };
@@ -174,16 +212,26 @@ export const getMedicinesForParent = async (
   parentId: string
 ): Promise<Medicine[]> => {
   try {
-    const medicinesRef = collection(db, 'users', adminId, 'medicines');
-    const q = query(medicinesRef, where('parentId', '==', parentId));
+    const medicinesRef = collection(
+      db,
+      "users",
+      adminId,
+      "parents",
+      parentId,
+      "medicines"
+    );
+    const q = query(medicinesRef);
     const snapshot = await getDocs(q);
-    
-    return snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    } as Medicine));
+
+    return snapshot.docs.map(
+      (doc) =>
+        ({
+          id: doc.id,
+          ...doc.data(),
+        } as Medicine)
+    );
   } catch (error) {
-    console.error('Error fetching medicines:', error);
+    console.error("Error fetching medicines:", error);
     throw error;
   }
 };
@@ -197,20 +245,30 @@ export const subscribeMedicines = (
   onUpdate: (medicines: Medicine[]) => void,
   onError: (error: Error) => void
 ): Unsubscribe => {
-  const medicinesRef = collection(db, 'users', adminId, 'medicines');
-  const q = query(medicinesRef, where('parentId', '==', parentId));
-  
+  const medicinesRef = collection(
+    db,
+    "users",
+    adminId,
+    "parents",
+    parentId,
+    "medicines"
+  );
+  const q = query(medicinesRef);
+
   return onSnapshot(
     q,
     (snapshot: QuerySnapshot<DocumentData>) => {
-      const medicines: Medicine[] = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      } as Medicine));
+      const medicines: Medicine[] = snapshot.docs.map(
+        (doc) =>
+          ({
+            id: doc.id,
+            ...doc.data(),
+          } as Medicine)
+      );
       onUpdate(medicines);
     },
     (error) => {
-      console.error('Error in medicines subscription:', error);
+      console.error("Error in medicines subscription:", error);
       onError(error);
     }
   );
@@ -219,19 +277,28 @@ export const subscribeMedicines = (
 /**
  * Mark medicine as taken
  */
-export const markMedicineAsTaken = async (
-  adminId: string,
-  medicineId: string
-): Promise<void> => {
-  try {
-    const medicineRef = doc(db, 'users', adminId, 'medicines', medicineId);
-    await updateDoc(medicineRef, {
-      lastTakenAt: new Date().toISOString(),
-    });
-  } catch (error) {
-    console.error('Error marking medicine as taken:', error);
-    throw error;
-  }
+export const markMedicineAsTaken = async ({
+  adminId,
+  parentId,
+  medicineId,
+  doseTime,
+}: {
+  adminId: string;
+  parentId: string;
+  medicineId: string;
+  doseTime: string;
+}) => {
+  const todayKey = format(new Date(), "yyyy-MM-dd");
+
+  await addDoc(
+    collection(db, "users", adminId, "parents", parentId, "doseLogs"),
+    {
+      medicineId,
+      doseTime,
+      date: todayKey,
+      takenAt: Date.now(),
+    }
+  );
 };
 
 /**
@@ -242,22 +309,47 @@ export const getMedicineById = async (
   medicineId: string
 ): Promise<Medicine | null> => {
   try {
-    const medicinesRef = collection(db, 'users', adminId, 'medicines');
+    const medicinesRef = collection(db, "users", adminId, "medicines");
     const q = query(medicinesRef);
     const snapshot = await getDocs(q);
-    
+
     const medicineDoc = snapshot.docs.find((doc) => doc.id === medicineId);
-    
+
     if (medicineDoc) {
       return {
         id: medicineDoc.id,
         ...medicineDoc.data(),
       } as Medicine;
     }
-    
+
     return null;
   } catch (error) {
-    console.error('Error fetching medicine:', error);
+    console.error("Error fetching medicine:", error);
+    throw error;
+  }
+};
+
+export const fetchDoseLogsForToday = (
+  adminId: string,
+  parentId: string,
+  onChange: (logs: DoseLog[]) => void
+) => {
+  try {
+    const todayKey = format(new Date(), "yyyy-MM-dd");
+
+    const q = query(
+      collection(db, `users/${adminId}/parents/${parentId}/doseLogs`),
+      where("date", "==", todayKey)
+    );
+
+    return onSnapshot(q, (snapshot) => {
+      const logs = snapshot.docs.map(
+        (doc) => ({ id: doc.id, ...doc.data() } as DoseLog)
+      );
+      onChange(logs);
+    });
+  } catch (error) {
+    console.error("Error fetching medicine:", error);
     throw error;
   }
 };
