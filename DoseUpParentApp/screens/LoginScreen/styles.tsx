@@ -1,0 +1,206 @@
+import {
+  StyleSheet,
+} from 'react-native';
+
+// Theme colors
+const COLORS = {
+  primary: '#6C63FF',
+  secondary: '#4CAF50',
+  accent: '#F7F8FA',
+  background: '#FFFFFF',
+  text: '#333333',
+  textLight: '#666666',
+  border: '#E0E0E0',
+  error: '#F44336',
+};
+
+export const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.accent,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: 24,
+  },
+  content: {
+    alignItems: 'center',
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  logoCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: COLORS.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+    marginBottom: 12,
+  },
+  logoEmoji: {
+    fontSize: 36,
+  },
+  appName: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  welcomeText: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginBottom: 8,
+  },
+  subtitleText: {
+    fontSize: 16,
+    color: COLORS.textLight,
+    marginBottom: 32,
+  },
+  card: {
+    backgroundColor: COLORS.background,
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  cardTitle: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: COLORS.text,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  cardSubtitle: {
+    fontSize: 15,
+    color: COLORS.textLight,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  phoneHighlight: {
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  changeNumberText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginBottom: 8,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.accent,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  inputIcon: {
+    fontSize: 18,
+    marginRight: 12,
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    color: COLORS.text,
+    paddingVertical: 14,
+  },
+  otpContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+  },
+  otpInput: {
+    width: 48,
+    height: 56,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.accent,
+    textAlign: 'center',
+    fontSize: 24,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  otpInputFilled: {
+    borderColor: COLORS.primary,
+    backgroundColor: `${COLORS.primary}10`,
+  },
+  errorText: {
+    color: COLORS.error,
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  button: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 16,
+    paddingVertical: 16,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
+  },
+  buttonText: {
+    color: COLORS.background,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  buttonArrow: {
+    color: COLORS.background,
+    fontSize: 18,
+    marginLeft: 8,
+  },
+  infoText: {
+    color: COLORS.textLight,
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 16,
+  },
+  resendContainer: {
+    marginTop: 20,
+    alignItems: 'flex-start',
+  },
+  resendText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  resendTextDisabled: {
+    color: COLORS.textLight,
+  },
+  footerText: {
+    color: COLORS.textLight,
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 32,
+  },
+});
