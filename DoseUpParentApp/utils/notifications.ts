@@ -1,6 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { Medicine } from './firebase';
+import { getMedicinesHash } from './helper';
 
 // Configure notification behavior
 Notifications.setNotificationHandler({
@@ -10,6 +11,8 @@ Notifications.setNotificationHandler({
     shouldSetBadge: true,
   }),
 });
+
+let lastScheduledHash: string | null = null;
 
 /**
  * Request notification permissions
@@ -37,6 +40,7 @@ export const requestNotificationPermissions = async (): Promise<boolean> => {
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#6C63FF',
         sound: 'default',
+        
       });
     }
 
@@ -81,6 +85,7 @@ export const scheduleNotification = async (
         data: { medicineId, doseTime },
         sound: 'default',
         priority: Notifications.AndroidNotificationPriority.HIGH,
+        channelId: 'medicine-reminders',
       },
       trigger,
     });
@@ -123,9 +128,19 @@ export const cancelNotification = async (notificationId: string): Promise<void> 
 export const scheduleAllMedicineNotifications = async (
   medicines: Medicine[]
 ): Promise<Map<string, string[]>> => {
-  const notificationIds = new Map<string, string[]>();
 
   // First, cancel all existing notifications
+  const hash = getMedicinesHash(medicines);
+
+  // ⛔ Skip if nothing changed
+  if (hash === lastScheduledHash) {
+    console.log('No medicine changes, skipping notification reschedule');
+    return new Map();
+  }
+
+  lastScheduledHash = hash;
+
+  const notificationIds = new Map<string, string[]>();
   await cancelAllNotifications();
 
   // Schedule new notifications for each medicine

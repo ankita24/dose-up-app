@@ -1,12 +1,15 @@
-import { initializeApp, FirebaseApp } from "firebase/app";
+import { initializeApp, FirebaseApp, } from "firebase/app";
 import {
   getAuth,
   Auth,
   signInWithPhoneNumber,
+  initializeAuth,
   signOut as firebaseSignOut,
   ConfirmationResult,
   ApplicationVerifier,
+  getReactNativePersistence
 } from "firebase/auth";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   getFirestore,
   Firestore,
@@ -44,8 +47,11 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app: FirebaseApp = initializeApp(firebaseConfig);
-const auth: Auth = getAuth(app);
+const app: FirebaseApp = initializeApp(firebaseConfig)
+
+export const auth: Auth = initializeAuth(app, {
+  persistence: getReactNativePersistence(AsyncStorage),
+});
 const db: Firestore = getFirestore(app);
 
 // Type definitions

@@ -78,3 +78,26 @@ export const buildTodayDoseRows = (
     return diffA - diffB;
   });
 };
+
+export function getNextTriggerDate(time: string) {
+  const [hours, minutes] = time.split(':').map(Number);
+
+  const now = new Date();
+  const trigger = new Date();
+
+  trigger.setHours(hours, minutes, 0, 0);
+
+  if (trigger <= now) {
+    trigger.setDate(trigger.getDate() + 1);
+  }
+
+  return trigger;
+}
+
+export const getMedicinesHash = (medicines: Medicine[]) =>
+  JSON.stringify(
+    medicines.map(m => ({
+      id: m.id,
+      doseTimes: [...m.doseTimes].sort(),
+    }))
+  );
